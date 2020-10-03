@@ -36,7 +36,7 @@ float metersInc = 0.25;	//Variable for incremental increase in meters wound/revo
 void revCount ()
 {
 	skeinCount = skeinCount + 1;	//Add 1 to counter
-	Serial.println (skeinCount);
+	Serial.print (skeinCount);
 	
 	if ((skeinCount % 2) == 0)		//Modulo divide by 2 if even remainder = 0
 	{
@@ -46,7 +46,10 @@ void revCount ()
 	{
 		digitalWrite(ledPin, LOW);		//Turn off led	
 	}
-		
+//Calculate meterage wound 
+	meterage = (skeinCount * metersPerRev);
+	Serial.print (" meterage = ");
+	Serial.println (meterage);		
 }
 
 //------------------------------------------------------------------------
@@ -63,19 +66,41 @@ void setup()
 void counterReset ()
 //Reset counter to zero
 {
-
-
+	pinMode(A0, INPUT_PULLUP);
+	int resetPin = digitalRead(A0);
+//If button pressed A0 goes low
+	if (resetPin == 0);
+	{
+		skeinCount = 0;
+		Serial.print ("Counter reset to ");
+		Serial.println (skeinCount);
+		delay(150);		//Delay to avoid bounce
+	}
 }
-
 
 //------------------------------------------------------------------------
-void metersPerRev ()
+void metersRev ()
 //Adjust meters/revolution via button presses from 1m - 2.5m
 {
+	pinMode(A1, INPUT_PULLUP);
+	int incrementPin = digitalRead(A1);
+//If button pressed increment meters/revolution by .25 between 1 & 2.5
+	if (incrementPin == 0);
+	{
+		if (metersPerRev <= 2.25);
+		{
+			(metersPerRev = metersPerRev + metersInc);
+		}
+		if (metersPerRev >= 2.5);
+		{
+			(metersPerRev = metersPerRev - metersInc);
+		}
+	}
+	Serial.print ("Meters per rev =" );
+	Serial.println (metersPerRev);
 
-
+	delay (200);	//Small delay to avoid bounce
 }
-
 
 //*************************************************************************
 void loop()
@@ -94,6 +119,8 @@ void loop()
 		reading = false;		//Set to false to enable another reading
 		led = true;	
 	}
-	
+
+	counterReset();		//Check if reset button pressed
+	metersRev ();		//Check if meters per revolution to be adjusted
 	delay (200);		//Small delay between readings for stability
 }
