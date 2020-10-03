@@ -3,8 +3,24 @@ Mike Garner 20/9/20
 Skein counter for skein winder
 Increments count per revolution
 led turns on & off every revolution
+Calculate meterage wound 
+
+Hall Effect Sensor A3213:
+P1 = VCC 3.3v; P2 = Grd; P3 = Data/S-Out
+47K between Data & 3.3v to pull high
+0.1uf cap between VCC & Grd
+1.0pf cap between Data & Grd
+
+Adafruit AT328P feather 
+A0	to Counter reset button
+A1 	to Meters/Revolution adjustment button
+
+D2 	to A3213 data pin (3)
+D10	to led 47K resistor to Grd
+
 
 */
+
 #include <Arduino.h>
 const int ledPin = 10;
 const int hallPin = 2;
@@ -12,7 +28,11 @@ int state = 0;
 bool reading = false;	//Monitors if reading taken
 bool led = false;		//Monitors if led on or off
 int skeinCount =0;		//Variable for revolutions
+float meterage = 0;		//Variable for total meterage wound
+float metersPerRev = 1;	//Variable for meters wound per revolution
+float metersInc = 0.25;	//Variable for incremental increase in meters wound/revolution 
 
+//----------------------------------------------------------------------
 void revCount ()
 {
 	skeinCount = skeinCount + 1;	//Add 1 to counter
@@ -29,6 +49,7 @@ void revCount ()
 		
 }
 
+//------------------------------------------------------------------------
 void setup()
 {
 	Serial.begin(115200);
@@ -38,7 +59,25 @@ void setup()
 	led = false;	//led off
 }
 
+//-------------------------------------------------------------------------
+void counterReset ()
+//Reset counter to zero
+{
 
+
+}
+
+
+//------------------------------------------------------------------------
+void metersPerRev ()
+//Adjust meters/revolution via button presses from 1m - 2.5m
+{
+
+
+}
+
+
+//*************************************************************************
 void loop()
 {
 	
@@ -56,5 +95,5 @@ void loop()
 		led = true;	
 	}
 	
-	delay (100);		//Small delay between readings for stability
+	delay (200);		//Small delay between readings for stability
 }
