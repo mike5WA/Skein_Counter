@@ -69,7 +69,7 @@ void counterReset ()
 	pinMode(A0, INPUT_PULLUP);
 	int resetPin = digitalRead(A0);
 //If button pressed A0 goes low
-	if (resetPin == 0);
+	if (resetPin == 0)
 	{
 		skeinCount = 0;
 		Serial.print ("Counter reset to ");
@@ -85,7 +85,7 @@ void metersRev ()
 	pinMode(A1, INPUT_PULLUP);
 	int incrementPin = digitalRead(A1);
 //If button pressed increment meters/revolution by .25 between 1 & 2.5
-	if (incrementPin == 0);
+	if (incrementPin == 0)
 	{
 		if (metersPerRev <= 2.25);
 		{
