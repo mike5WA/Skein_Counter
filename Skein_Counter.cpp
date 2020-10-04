@@ -22,6 +22,7 @@ D10	to led 47K resistor to Grd
 */
 
 #include <Arduino.h>
+#define VBATPIN A6
 const int ledPin = 10;
 const int hallPin = 2;
 int state = 0;
@@ -31,6 +32,7 @@ int skeinCount =0;		//Variable for revolutions
 float meterage = 0;		//Variable for total meterage wound
 float metersPerRev = 1;	//Variable for meters wound per revolution
 float metersInc = 0.25;	//Variable for incremental increase in meters wound/revolution 
+
 
 //----------------------------------------------------------------------
 void revCount ()
@@ -102,6 +104,30 @@ void metersRev ()
 	}
 	delay (100);	//Small delay to avoid bounce
 }
+//--------------------------------------------------------------------
+/*
+LiPoly max V ~ 4.2V; Stick around 3.7v; Cut out 3.2V
+Referance voltage for feather is 3.3v
+analogRead will give from 0 to 1023 with 1023 = 3.3v
+Feather has double 100K resistor divider on BAT pin connected to A6 so reading is halved
+*/
+
+void batVolts ()
+{
+	float measuredvbat = analogRead(VBATPIN);
+	//Serial.print("A6 read: " );Serial.println(measuredvbat);
+//As there are 2 100K resistor/dividers reading is halved
+	measuredvbat *= 2;		// multiply by 2 to give true reading
+	measuredvbat *= 3.3;  	// Upscale by 3.3V, our reference voltage
+	measuredvbat /= 1024; 	// convert to voltage
+	Serial.print("VBat: " ); Serial.println(measuredvbat);
+
+	if (measuredvbat <= 3.4)
+	{
+		Serial.print("Charge Battery: " ); Serial.println(measuredvbat);
+	}
+
+}
 
 //*************************************************************************
 void loop()
@@ -122,5 +148,6 @@ void loop()
 
 	counterReset();		//Check if reset button pressed
 	metersRev ();		//Check if meters per revolution to be adjusted
+	batVolts ();		//Check battery charge
 	delay (200);		//Small delay between readings for stability
 }
