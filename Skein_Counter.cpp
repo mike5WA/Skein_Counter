@@ -87,19 +87,20 @@ void metersRev ()
 //If button pressed increment meters/revolution by .25 between 1 & 2.5
 	if (incrementPin == 0)
 	{
-		if (metersPerRev <= 2.25);
+		if (metersPerRev <= 2.25)
 		{
-			(metersPerRev = metersPerRev + metersInc);
+			metersPerRev = (metersPerRev + metersInc);
+			Serial.print ("Meters per rev =" );
+			Serial.println (metersPerRev);
 		}
-		if (metersPerRev >= 2.5);
+		else
 		{
-			(metersPerRev = metersPerRev - metersInc);
+			metersPerRev = (1);
+			Serial.print ("Meters per rev =" );
+			Serial.println (metersPerRev);
 		}
 	}
-	Serial.print ("Meters per rev =" );
-	Serial.println (metersPerRev);
-
-	delay (200);	//Small delay to avoid bounce
+	delay (100);	//Small delay to avoid bounce
 }
 
 //*************************************************************************
@@ -112,7 +113,6 @@ void loop()
 	{
 		revCount ();
 		reading = true;			//Set true to avoid second reading
-		
 	}
 	else	//State high no magnet in proximity
 	{
