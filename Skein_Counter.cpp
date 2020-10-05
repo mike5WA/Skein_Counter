@@ -14,16 +14,41 @@ P1 = VCC 3.3v; P2 = Grd; P3 = Data/S-Out
 Adafruit AT328P feather 
 A0	to Counter reset button
 A1 	to Meters/Revolution adjustment button
+SCK/D13		to CLK 		P7
+MOSI/D11	to MOSI 	P8
+D10			to CS/RS 	P9
+D9			to RST 		P10
+D7 			to D/C 		P11
 
 D2 	to A3213 data pin (3)
-D10	to led 47K resistor to Grd
+D7	to led 47K resistor to Grd change
 
+LCD Display = 1.44 128*128 Arduino Module; Driver ST7735
+Display 3.3V,
+Module Pins:
+P1 VCC; P2 Gnd; P3 Gnd; P4 N/C; P5 N/C; P6 PWM backlight
+P7 CLK; P8 SDI/MOSI; P9 RS ; P10 RST; P11 D/C
+Code taken from Adafruit "graphicstest.ino" in library
 
 */
 
 #include <Arduino.h>
+#include <Adafruit_GFX.h>    	// Core graphics library
+#include <Adafruit_ST7735.h> 	// Hardware-specific library for ST7735
+#include <SPI.h>
+#include <Adafruit_I2CDevice.h>
+
+#define TFT_CS        10
+#define TFT_RST        9 	// Or set to -1 and connect to Arduino RESET pin
+#define TFT_DC         6  	//For uno Adafruit used 8 changed to 6 for AT328P feather
+
 #define VBATPIN A6
-const int ledPin = 10;
+
+//Using HARDWARE SPI
+Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
+
+
+const int ledPin = 7;
 const int hallPin = 2;
 int state = 0;
 bool reading = false;	//Monitors if reading taken
@@ -61,8 +86,36 @@ void setup()
 	pinMode (ledPin, OUTPUT);
 	pinMode (hallPin, INPUT);
 	attachInterrupt(digitalPinToInterrupt(hallPin), revCount, FALLING);	//Will trigger on fall 5v to 0v
-	led = false;	//led off
+	led = false;	//led off at start
+
+	Serial.print(F("Hello! ST77xx TFT Test"));
+// Initializer for a 1.44" TFT:
+  	tft.initR(INITR_144GREENTAB); // Init ST7735R chip, green tab
+  	Serial.println(F("Initialized"));
+  	uint16_t time = millis();
+  	tft.fillScreen(ST77XX_BLACK);
+  	time = millis() - time;
+
+  	Serial.println(time, DEC);
+  	delay(500);
+
+	Serial.println(tft.getRotation(), DEC);
+
 }
+
+
+void lcdDisplay ()
+{
+	tft.setRotation(3);
+	tft.setTextWrap(false);
+  	tft.fillScreen(ST77XX_BLACK);
+  	tft.setCursor(0, 30);
+  	tft.setTextColor(ST77XX_YELLOW);
+  	tft.setTextSize(2);
+  	tft.println("Count = 0");	
+
+}
+
 
 //-------------------------------------------------------------------------
 void counterReset ()
@@ -76,6 +129,7 @@ void counterReset ()
 		skeinCount = 0;
 		Serial.print ("Counter reset to ");
 		Serial.println (skeinCount);
+		lcdDisplay ();
 		delay(150);		//Delay to avoid bounce
 	}
 }
@@ -106,7 +160,7 @@ void metersRev ()
 }
 //--------------------------------------------------------------------
 /*
-LiPoly max V ~ 4.2V; Stick around 3.7v; Cut out 3.2V
+LiPoly max V ~ 4.2V; Sticks around 3.7v; Cut out 3.2V
 Referance voltage for feather is 3.3v
 analogRead will give from 0 to 1023 with 1023 = 3.3v
 Feather has double 100K resistor divider on BAT pin connected to A6 so reading is halved
@@ -129,21 +183,23 @@ void batVolts ()
 
 }
 
+
+
 //*************************************************************************
 void loop()
 {
 	
-	state = digitalRead(hallPin);	//Get status of pin 2
+	state = digitalRead(hallPin);				//Get status of pin 2 high or low
 
 	if ((state == LOW) && (reading = false))	//Magnet in proximity and no current reading
 	{
-		revCount ();
-		reading = true;			//Set true to avoid second reading
+		revCount ();							//Counter routine
+		reading = true;							//Set true to avoid second reading
 	}
 	else	//State high no magnet in proximity
 	{
 		reading = false;		//Set to false to enable another reading
-		led = true;	
+		led = true;				//
 	}
 
 	counterReset();		//Check if reset button pressed
