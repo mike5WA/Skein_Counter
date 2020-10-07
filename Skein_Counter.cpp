@@ -51,12 +51,17 @@ Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 const int ledPin = 7;
 const int hallPin = 2;
 int state = 0;
-bool reading = false;	//Monitors if reading taken
-bool led = false;		//Monitors if led on or off
-int skeinCount =0;		//Variable for revolutions
-float meterage = 0;		//Variable for total meterage wound
-float metersPerRev = 1;	//Variable for meters wound per revolution
-float metersInc = 0.25;	//Variable for incremental increase in meters wound/revolution 
+bool reading = false;		//Monitors if reading taken
+bool led = false;			//Monitors if led on or off
+int skeinCount =0;			//Variable for revolutions
+int oldCount = 0;			//Variable to keep tabs on count changes
+int x = 0;
+int y = 0;
+int size = 1;	
+
+float meterage = 0;			//Variable for total meterage wound
+float metersPerRev = 1;		//Variable for meters wound per revolution
+float metersInc = 0.25;		//Variable for incremental increase in meters wound/revolution 
 
 
 //----------------------------------------------------------------------
@@ -93,29 +98,56 @@ void setup()
   	tft.initR(INITR_144GREENTAB); // Init ST7735R chip, green tab
   	Serial.println(F("Initialized"));
   	uint16_t time = millis();
+//Set up screen headings  	
+  	tft.setRotation(2);				//Set screen portrait
   	tft.fillScreen(ST77XX_BLACK);
-  	time = millis() - time;
+  	tft.fillRect(0, 0, 127, 30, ST77XX_WHITE);	//Create white box
+  	tft.setTextWrap(false);
+//Title
+  	tft.setTextSize(3);
+  	tft.setCursor(26,5);			//
+  	tft.setTextColor(ST77XX_BLUE);
+  	tft.println("DATA");
+//Meters-Revolution  	
+  	tft.setTextSize(2);
+  	tft.setTextColor(ST77XX_WHITE);
+  	tft.setCursor(0,40);			
+  	tft.println("M/R ");
+  	tft.setCursor(70,40);			
+  	tft.print(metersPerRev,2);
+//Revolutions  	
+  	tft.setCursor(0,62);			
+  	tft.println("Rev ");
+//Meterage wound  	
+  	tft.setCursor(0,84);
+  	tft.println("Mtr ");
+//Battery  	
+  	tft.setCursor(0,106);			
+  	tft.println("Bat ");
 
+  	time = millis() - time;
   	Serial.println(time, DEC);
   	delay(500);
-
-	Serial.println(tft.getRotation(), DEC);
-
 }
 
-
-void lcdDisplay ()
+void drawText(char *text, uint16_t color)
 {
-	tft.setRotation(3);
-	tft.setTextWrap(false);
-  	tft.fillScreen(ST77XX_BLACK);
-  	tft.setCursor(0, 30);
-  	tft.setTextColor(ST77XX_YELLOW);
-  	tft.setTextSize(2);
-  	tft.println("Count = 0");	
-
+  tft.setCursor(x, y);
+  tft.setTextColor(color);
+  tft.setTextSize(size);
+  tft.setTextWrap(true);
+  tft.print(text);
 }
 
+void fillRects(uint16_t color1, uint16_t color2)
+ {
+  //tft.fillScreen(ST77XX_BLACK);
+  for (int16_t x=tft.width()-1; x > 6; x-=6)
+   	{
+    tft.fillRect(tft.width()/2 -x/2, tft.height()/2 -x/2 , x, x, color1);
+    tft.drawRect(tft.width()/2 -x/2, tft.height()/2 -x/2 , x, x, color2);
+  	}
+}
 
 //-------------------------------------------------------------------------
 void counterReset ()
@@ -129,7 +161,10 @@ void counterReset ()
 		skeinCount = 0;
 		Serial.print ("Counter reset to ");
 		Serial.println (skeinCount);
-		lcdDisplay ();
+//Overwrite old data with black box
+		tft.fillRect(50, 60, 77, 20, ST77XX_GREEN);	
+		tft.setCursor(80,62);
+		tft.print(skeinCount);
 		delay(150);		//Delay to avoid bounce
 	}
 }
@@ -143,6 +178,8 @@ void metersRev ()
 //If button pressed increment meters/revolution by .25 between 1 & 2.5
 	if (incrementPin == 0)
 	{
+//Overwrite old data with balack box
+		tft.fillRect(50, 36, 77, 20, ST77XX_YELLOW);	
 		if (metersPerRev <= 2.25)
 		{
 			metersPerRev = (metersPerRev + metersInc);
@@ -155,7 +192,13 @@ void metersRev ()
 			Serial.print ("Meters per rev =" );
 			Serial.println (metersPerRev);
 		}
+//Display new data
+		tft.setCursor(65,40);
+		tft.setTextColor(ST77XX_RED);			
+  		tft.print(metersPerRev,2);
+
 	}
+
 	delay (100);	//Small delay to avoid bounce
 }
 //--------------------------------------------------------------------
@@ -174,21 +217,40 @@ void batVolts ()
 	measuredvbat *= 2;		// multiply by 2 to give true reading
 	measuredvbat *= 3.3;  	// Upscale by 3.3V, our reference voltage
 	measuredvbat /= 1024; 	// convert to voltage
-	Serial.print("VBat: " ); Serial.println(measuredvbat);
+	//Serial.print("VBat: " ); Serial.println(measuredvbat);
 
 	if (measuredvbat <= 3.4)
 	{
 		Serial.print("Charge Battery: " ); Serial.println(measuredvbat);
 	}
+}
 
+//------------------------------------------------------------------------
+
+void dataCalcs ()
+{
+//If skein counter has increased then recalculate data and display
+	if (skeinCount != oldCount)
+	{
+//Display counts & meterage
+//1st clear old data
+		tft.fillRect(50, 60, 67, 20, ST77XX_GREEN);	//Box to overwrite Rev data
+		tft.fillRect(50, 84, 77, 20, ST77XX_BLUE);	//Box to overwrite old meterage
+		tft.setCursor(70,62);						//Co-ords of Revolutions data
+		tft.setTextColor(ST77XX_BLACK);
+		tft.print(skeinCount,DEC);					//Write new skeincount
+		tft.setTextColor(ST77XX_WHITE);
+		tft.setCursor(55,86);						//Co-ords of meterage
+		tft.print(meterage,2);
+		oldCount = skeinCount;
+	}
 }
 
 
-
 //*************************************************************************
+
 void loop()
 {
-	
 	state = digitalRead(hallPin);				//Get status of pin 2 high or low
 
 	if ((state == LOW) && (reading = false))	//Magnet in proximity and no current reading
@@ -202,8 +264,10 @@ void loop()
 		led = true;				//
 	}
 
+//
 	counterReset();		//Check if reset button pressed
 	metersRev ();		//Check if meters per revolution to be adjusted
 	batVolts ();		//Check battery charge
+	dataCalcs ();		//Display data
 	delay (200);		//Small delay between readings for stability
 }
