@@ -63,6 +63,9 @@ float meterage = 0;			//Variable for total meterage wound
 float metersPerRev = 1;		//Variable for meters wound per revolution
 float metersInc = 0.25;		//Variable for incremental increase in meters wound/revolution 
 
+String batText = "";		//Variable for battery status text
+int batStatus = 0;			//Variable to keep tabs on battery status
+int batOld = 1;
 
 //----------------------------------------------------------------------
 void revCount ()
@@ -78,10 +81,6 @@ void revCount ()
 	{
 		digitalWrite(ledPin, LOW);		//Turn off led	
 	}
-//Calculate meterage wound 
-	meterage = (skeinCount * metersPerRev);
-	Serial.print (" meterage = ");
-	Serial.println (meterage);		
 }
 
 //------------------------------------------------------------------------
@@ -139,36 +138,6 @@ void drawText(char *text, uint16_t color)
   tft.print(text);
 }
 
-void fillRects(uint16_t color1, uint16_t color2)
- {
-  //tft.fillScreen(ST77XX_BLACK);
-  for (int16_t x=tft.width()-1; x > 6; x-=6)
-   	{
-    tft.fillRect(tft.width()/2 -x/2, tft.height()/2 -x/2 , x, x, color1);
-    tft.drawRect(tft.width()/2 -x/2, tft.height()/2 -x/2 , x, x, color2);
-  	}
-}
-
-//-------------------------------------------------------------------------
-void counterReset ()
-//Reset counter to zero
-{
-	pinMode(A0, INPUT_PULLUP);
-	int resetPin = digitalRead(A0);
-//If button pressed A0 goes low
-	if (resetPin == 0)
-	{
-		skeinCount = 0;
-		Serial.print ("Counter reset to ");
-		Serial.println (skeinCount);
-//Overwrite old data with black box
-		tft.fillRect(50, 60, 77, 20, ST77XX_GREEN);	
-		tft.setCursor(80,62);
-		tft.print(skeinCount);
-		delay(150);		//Delay to avoid bounce
-	}
-}
-
 //------------------------------------------------------------------------
 void metersRev ()
 //Adjust meters/revolution via button presses from 1m - 2.5m
@@ -196,9 +165,7 @@ void metersRev ()
 		tft.setCursor(65,40);
 		tft.setTextColor(ST77XX_RED);			
   		tft.print(metersPerRev,2);
-
 	}
-
 	delay (100);	//Small delay to avoid bounce
 }
 //--------------------------------------------------------------------
@@ -217,38 +184,78 @@ void batVolts ()
 	measuredvbat *= 2;		// multiply by 2 to give true reading
 	measuredvbat *= 3.3;  	// Upscale by 3.3V, our reference voltage
 	measuredvbat /= 1024; 	// convert to voltage
-	//Serial.print("VBat: " ); Serial.println(measuredvbat);
 
-	if (measuredvbat <= 3.4)
+	Serial.print("VBat: " ); Serial.println(measuredvbat);
+	if (measuredvbat < 3.3)					//Less than operating voltage
 	{
-		Serial.print("Charge Battery: " ); Serial.println(measuredvbat);
+		batText = ("Charge");
+		tft.setTextColor(ST77XX_RED);
+		batStatus = 2;
 	}
+	if (measuredvbat >= 3.3 && measuredvbat < 3.6)	
+	{
+		batText = (" Low ");
+		tft.setTextColor(ST77XX_ORANGE);
+		batStatus = 1;
+	}
+	
+	if (measuredvbat > 3.6)			
+	{
+		batText = (" OK ");
+		tft.setTextColor(ST77XX_GREEN);	
+		batStatus = 0;
+	}
+	
+//Display battery status if it has changed
+	if (batStatus != batOld)
+	{
+//Wipe old data
+		tft.fillRect(50, 110, 77, 20, ST77XX_BLACK);	
+		tft.setCursor(55,110);
+  		tft.println(batText);	
+  		batOld = batStatus;
+	}
+	//Serial.print("Battery: " ); Serial.println(batStatus);
 }
 
 //------------------------------------------------------------------------
 
 void dataCalcs ()
 {
-//If skein counter has increased then recalculate data and display
+//If skein counter has changed then recalculate data and display
 	if (skeinCount != oldCount)
 	{
 //Display counts & meterage
 //1st clear old data
-		tft.fillRect(50, 60, 67, 20, ST77XX_GREEN);	//Box to overwrite Rev data
-		tft.fillRect(50, 84, 77, 20, ST77XX_BLUE);	//Box to overwrite old meterage
-		tft.setCursor(70,62);						//Co-ords of Revolutions data
-		tft.setTextColor(ST77XX_BLACK);
-		tft.print(skeinCount,DEC);					//Write new skeincount
+		meterage = (skeinCount * metersPerRev);			//Calculate meterage wound
+		tft.fillRect(50, 60, 77, 20, ST77XX_MAGENTA);	//Box to overwrite Rev data
+		tft.fillRect(50, 84, 77, 20, ST77XX_BLUE);		//Box to overwrite old meterage
+		tft.setCursor(70,62);							//Co-ords of Revolutions data
 		tft.setTextColor(ST77XX_WHITE);
-		tft.setCursor(55,86);						//Co-ords of meterage
+		tft.print(skeinCount,DEC);						//Write new skeincount
+		tft.setTextColor(ST77XX_WHITE);
+		tft.setCursor(55,86);							//Co-ords of meterage
 		tft.print(meterage,2);
 		oldCount = skeinCount;
 	}
 }
 
+//--------------------------------------------------------------------
+void counterReset ()
+//Reset counter and meterage to zero
+{
+	pinMode(A0, INPUT_PULLUP);
+	int resetPin = digitalRead(A0);
+//If button pressed A0 goes low triggering a reset
+	if (resetPin == 0)
+	{
+		skeinCount = 0;
+		delay(100);			//Delay to avoid bounce
+		dataCalcs ();		//Recalculate sets counter & meterage to 0
+	}
+}
 
 //*************************************************************************
-
 void loop()
 {
 	state = digitalRead(hallPin);				//Get status of pin 2 high or low
@@ -268,6 +275,6 @@ void loop()
 	counterReset();		//Check if reset button pressed
 	metersRev ();		//Check if meters per revolution to be adjusted
 	batVolts ();		//Check battery charge
-	dataCalcs ();		//Display data
+	dataCalcs ();		//Calculate & display data
 	delay (200);		//Small delay between readings for stability
 }
