@@ -38,11 +38,11 @@ Code taken from Adafruit "graphicstest.ino" in library
 #include <SPI.h>
 #include <Adafruit_I2CDevice.h>
 
-#define TFT_CS        10
-#define TFT_RST        9 	// Or set to -1 and connect to Arduino RESET pin
-#define TFT_DC         6  	//For uno Adafruit used 8 changed to 6 for AT328P feather
-
-#define VBATPIN A6
+#define TFT_CS      10
+#define TFT_RST     9 		// Or set to -1 and connect to Arduino RESET pin
+#define TFT_DC      6  		//For uno Adafruit used 8 changed to 6 for AT328P feather
+#define bLightPin 	5		//Backlight PWM control
+#define VBATPIN 	A6		//Analog batvoltage pin
 
 //Using HARDWARE SPI
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
@@ -67,8 +67,8 @@ float metersPerRev = 1;		//Variable for meters wound per revolution
 float metersInc = 0.25;		//Variable for incremental increase in meters wound/revolution 
 
 String batText = "";		//Variable for battery status text
-int batStatus = 0;			//Variable to keep tabs on battery status
-int batOld = 0;
+int batStatus ;				//Variable to keep tabs on battery status
+int batOld = 3;				//
 
 //----------------------------------------------------------------------
 void revCount ()
@@ -100,7 +100,7 @@ void setup()
   	tft.initR(INITR_144GREENTAB); 		// Init ST7735R chip, green tab
   	Serial.println(F("Initialized"));
   	isDisplayVisible = true;			//Display is on
-  	//time = millis();					//Start timer
+  	analogWrite(bLightPin, 255);		//Backlight to full
 
 //Set up screen headings  	
   	tft.setRotation(2);					//Set screen portrait
@@ -193,14 +193,13 @@ void batVolts ()
 		tft.setTextColor(ST77XX_ORANGE);
 		batStatus = 1;
 	}
-	else 			
+	if (measuredvbat >= 3.6)
 	{
 		batText = (" OK ");
 		tft.setTextColor(ST77XX_GREEN);	
-		batStatus = 0;
+		batStatus = 0;	
 	}
-	
-//Display battery status if it has changed
+//Refresh battery status only if it has changed to avoid flicker
 	if (batStatus != batOld)
 	{
 //Wipe old data
@@ -262,18 +261,20 @@ void screenSaver ()
 	Serial.print("Elapsed Time ");	Serial.println(millis() - runtime);
 	delay(500);
 */
-	if (millis() - runtime > 30000) 		//No revolution/count for 30 seconds
+	if (millis() - runtime > 720000) 		//No revolution/count for x millis
 	{
 //Turn off screen
 		isDisplayVisible = false;
 		tft.enableDisplay(isDisplayVisible);
-		//Serial.print("isDisplayVisible "); Serial.println(isDisplayVisible);
+//Reduce backlight to 10%
+		analogWrite(bLightPin, 25);			
 	}
-	else 	//runtime <30,000 millis screen on
+	else 	//runtime <30,000 millis screen on baclight 100%
 	{
 	isDisplayVisible = true;
 	tft.enableDisplay(isDisplayVisible);
 	//Serial.print("isDisplayVisible "); Serial.println(isDisplayVisible);
+	analogWrite(bLightPin, 255);	//Backlight full
 	}
 }
 
