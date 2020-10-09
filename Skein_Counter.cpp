@@ -47,7 +47,6 @@ Code taken from Adafruit "graphicstest.ino" in library
 //Using HARDWARE SPI
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
-
 const int ledPin = 7;
 const int hallPin = 2;
 int state = 0;
@@ -57,7 +56,11 @@ int skeinCount =0;			//Variable for revolutions
 int oldCount = 0;			//Variable to keep tabs on count changes
 int x = 0;
 int y = 0;
-int size = 1;	
+int size = 1;
+
+uint16_t time = 0;	
+unsigned long runtime;
+bool isDisplayVisible = false;	//Assume display off until configured
 
 float meterage = 0;			//Variable for total meterage wound
 float metersPerRev = 1;		//Variable for meters wound per revolution
@@ -65,14 +68,14 @@ float metersInc = 0.25;		//Variable for incremental increase in meters wound/rev
 
 String batText = "";		//Variable for battery status text
 int batStatus = 0;			//Variable to keep tabs on battery status
-int batOld = 1;
+int batOld = 0;
 
 //----------------------------------------------------------------------
 void revCount ()
 {
 	skeinCount = skeinCount + 1;	//Add 1 to counter
-	Serial.print (skeinCount);
-	
+	Serial.println (skeinCount);
+		
 	if ((skeinCount % 2) == 0)		//Modulo divide by 2 if even remainder = 0
 	{
 		digitalWrite(ledPin, HIGH);		//Turn on led
@@ -92,13 +95,15 @@ void setup()
 	attachInterrupt(digitalPinToInterrupt(hallPin), revCount, FALLING);	//Will trigger on fall 5v to 0v
 	led = false;	//led off at start
 
-	Serial.print(F("Hello! ST77xx TFT Test"));
+	Serial.print(F("ST77xx TFT Test"));
 // Initializer for a 1.44" TFT:
-  	tft.initR(INITR_144GREENTAB); // Init ST7735R chip, green tab
+  	tft.initR(INITR_144GREENTAB); 		// Init ST7735R chip, green tab
   	Serial.println(F("Initialized"));
-  	uint16_t time = millis();
+  	isDisplayVisible = true;			//Display is on
+  	//time = millis();					//Start timer
+
 //Set up screen headings  	
-  	tft.setRotation(2);				//Set screen portrait
+  	tft.setRotation(2);					//Set screen portrait
   	tft.fillScreen(ST77XX_BLACK);
   	tft.fillRect(0, 0, 127, 30, ST77XX_WHITE);	//Create white box
   	tft.setTextWrap(false);
@@ -121,21 +126,12 @@ void setup()
   	tft.setCursor(0,84);
   	tft.println("Mtr ");
 //Battery  	
-  	tft.setCursor(0,106);			
+  	tft.setCursor(0,108);			
   	tft.println("Bat ");
 
-  	time = millis() - time;
-  	Serial.println(time, DEC);
+  	//time = millis() - time;
+  	//Serial.println(time, DEC);
   	delay(500);
-}
-
-void drawText(char *text, uint16_t color)
-{
-  tft.setCursor(x, y);
-  tft.setTextColor(color);
-  tft.setTextSize(size);
-  tft.setTextWrap(true);
-  tft.print(text);
 }
 
 //------------------------------------------------------------------------
@@ -179,13 +175,12 @@ Feather has double 100K resistor divider on BAT pin connected to A6 so reading i
 void batVolts ()
 {
 	float measuredvbat = analogRead(VBATPIN);
-	//Serial.print("A6 read: " );Serial.println(measuredvbat);
 //As there are 2 100K resistor/dividers reading is halved
 	measuredvbat *= 2;		// multiply by 2 to give true reading
 	measuredvbat *= 3.3;  	// Upscale by 3.3V, our reference voltage
 	measuredvbat /= 1024; 	// convert to voltage
 
-	Serial.print("VBat: " ); Serial.println(measuredvbat);
+	//Serial.print("VBat: " ); Serial.println(measuredvbat);
 	if (measuredvbat < 3.3)					//Less than operating voltage
 	{
 		batText = ("Charge");
@@ -198,8 +193,7 @@ void batVolts ()
 		tft.setTextColor(ST77XX_ORANGE);
 		batStatus = 1;
 	}
-	
-	if (measuredvbat > 3.6)			
+	else 			
 	{
 		batText = (" OK ");
 		tft.setTextColor(ST77XX_GREEN);	
@@ -215,7 +209,8 @@ void batVolts ()
   		tft.println(batText);	
   		batOld = batStatus;
 	}
-	//Serial.print("Battery: " ); Serial.println(batStatus);
+	Serial.print("Battery: " ); Serial.println(measuredvbat);
+	Serial.print("Bat Status "); Serial.println(batStatus);
 }
 
 //------------------------------------------------------------------------
@@ -223,19 +218,19 @@ void batVolts ()
 void dataCalcs ()
 {
 //If skein counter has changed then recalculate data and display
+	
 	if (skeinCount != oldCount)
 	{
 //Display counts & meterage
-//1st clear old data
+		runtime = millis();								//Set timer for screensaver
 		meterage = (skeinCount * metersPerRev);			//Calculate meterage wound
 		tft.fillRect(50, 60, 77, 20, ST77XX_MAGENTA);	//Box to overwrite Rev data
 		tft.fillRect(50, 84, 77, 20, ST77XX_BLUE);		//Box to overwrite old meterage
 		tft.setCursor(70,62);							//Co-ords of Revolutions data
-		tft.setTextColor(ST77XX_WHITE);
+		tft.setTextColor(ST77XX_WHITE);					//Text colour
 		tft.print(skeinCount,DEC);						//Write new skeincount
-		tft.setTextColor(ST77XX_WHITE);
 		tft.setCursor(55,86);							//Co-ords of meterage
-		tft.print(meterage,2);
+		tft.print(meterage,2);							//Write new meterage
 		oldCount = skeinCount;
 	}
 }
@@ -252,6 +247,33 @@ void counterReset ()
 		skeinCount = 0;
 		delay(100);			//Delay to avoid bounce
 		dataCalcs ();		//Recalculate sets counter & meterage to 0
+	}
+}
+//--------------------------------------------------------------------
+
+void screenSaver ()
+{
+//runtime is calculated and stored on every revolution
+//If no revolution millis() less runtime will increase	
+//If no rotation for x blank screen
+/*
+	Serial.print("millis "); Serial.println(millis());
+	Serial.print("Run Time ");	Serial.println(runtime);
+	Serial.print("Elapsed Time ");	Serial.println(millis() - runtime);
+	delay(500);
+*/
+	if (millis() - runtime > 30000) 		//No revolution/count for 30 seconds
+	{
+//Turn off screen
+		isDisplayVisible = false;
+		tft.enableDisplay(isDisplayVisible);
+		//Serial.print("isDisplayVisible "); Serial.println(isDisplayVisible);
+	}
+	else 	//runtime <30,000 millis screen on
+	{
+	isDisplayVisible = true;
+	tft.enableDisplay(isDisplayVisible);
+	//Serial.print("isDisplayVisible "); Serial.println(isDisplayVisible);
 	}
 }
 
@@ -271,10 +293,10 @@ void loop()
 		led = true;				//
 	}
 
-//
 	counterReset();		//Check if reset button pressed
 	metersRev ();		//Check if meters per revolution to be adjusted
 	batVolts ();		//Check battery charge
 	dataCalcs ();		//Calculate & display data
-	delay (200);		//Small delay between readings for stability
+	delay (150);		//Small delay between readings for stability
+	screenSaver ();		//Check if no activity & apply screensaver
 }
