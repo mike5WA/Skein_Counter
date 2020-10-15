@@ -20,12 +20,12 @@ D10			to CS/RS 	P9
 D9			to RST 		P10
 D7 			to D/C 		P11
 
-D2 	to A3213 data pin (3)
-D7	to led 47K resistor to Grd change
+D2 	(Interrupt 0) to Hall Effect sensor A3213 data pin (3)
+D7	to led 22ohm resistor to Grd 
 
 LCD Display = 1.44 128*128 Arduino Module; Driver ST7735
 Display 3.3V,
-Module Pins:
+Lcd Module Pins:
 P1 VCC; P2 Gnd; P3 Gnd; P4 N/C; P5 N/C; P6 PWM backlight
 P7 CLK; P8 SDI/MOSI; P9 RS ; P10 RST; P11 D/C
 Code taken from Adafruit "graphicstest.ino" in library
@@ -48,7 +48,7 @@ Code taken from Adafruit "graphicstest.ino" in library
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
 const int ledPin = 7;
-const int hallPin = 2;
+const int hallPin = 2;		//Interrupt 0
 int state = 0;
 bool reading = false;		//Monitors if reading taken
 bool led = false;			//Monitors if led on or off
@@ -61,21 +61,23 @@ int size = 1;
 uint16_t time = 0;	
 unsigned long runtime;
 bool isDisplayVisible = false;	//Assume display off until configured
+int screenOff = 20;				//No of minutes before screen saver actioned
 
-float meterage = 0;			//Variable for total meterage wound
-float metersPerRev = 1;		//Variable for meters wound per revolution
-float metersInc = 0.25;		//Variable for incremental increase in meters wound/revolution 
+float meterage = 0;				//Variable for total meterage wound
+float metersPerRev = 1;			//Variable for meters wound per revolution
+float metersInc = 0.25;			//Variable for incremental increase in meters wound/revolution 
 
-String batText = "";		//Variable for battery status text
-int batStatus ;				//Variable to keep tabs on battery status
-int batOld = 3;				//
+String batText = "";			//Variable for battery status text
+int batStatus ;					//Variable to keep tabs on battery status
+int batOld = 3;				
 
 //----------------------------------------------------------------------
 void revCount ()
+//Routine which runs when interrupt 0 triggered on D2 (hallPin)
 {
 	skeinCount = skeinCount + 1;	//Add 1 to counter
-	Serial.println (skeinCount);
-		
+	//Serial.println (skeinCount);
+//Blink led on/off as count increments		
 	if ((skeinCount % 2) == 0)		//Modulo divide by 2 if even remainder = 0
 	{
 		digitalWrite(ledPin, HIGH);		//Turn on led
@@ -92,7 +94,10 @@ void setup()
 	Serial.begin(115200);
 	pinMode (ledPin, OUTPUT);
 	pinMode (hallPin, INPUT);
-	attachInterrupt(digitalPinToInterrupt(hallPin), revCount, FALLING);	//Will trigger on fall 5v to 0v
+
+//Trigger interrupt 0 on falling signal	to run revCount
+	attachInterrupt(digitalPinToInterrupt(hallPin), revCount, FALLING);	
+
 	led = false;	//led off at start
 
 	Serial.print(F("ST77xx TFT Test"));
@@ -138,7 +143,7 @@ void setup()
 void metersRev ()
 //Adjust meters/revolution via button presses from 1m - 2.5m
 {
-	pinMode(A1, INPUT_PULLUP);
+	pinMode(A1, INPUT_PULLUP);			//Pin A1 high (3.3v) taken low (0) if button pressed
 	int incrementPin = digitalRead(A1);
 //If button pressed increment meters/revolution by .25 between 1 & 2.5
 	if (incrementPin == 0)
@@ -151,7 +156,7 @@ void metersRev ()
 			Serial.print ("Meters per rev =" );
 			Serial.println (metersPerRev);
 		}
-		else
+		else 	//Reset to 1
 		{
 			metersPerRev = (1);
 			Serial.print ("Meters per rev =" );
@@ -162,11 +167,11 @@ void metersRev ()
 		tft.setTextColor(ST77XX_RED);			
   		tft.print(metersPerRev,2);
 	}
-	delay (100);	//Small delay to avoid bounce
+	delay (150);	//Small delay to avoid bounce
 }
 //--------------------------------------------------------------------
 /*
-LiPoly max V ~ 4.2V; Sticks around 3.7v; Cut out 3.2V
+LiPoly max V ~ 4.2V; Sticks around 3.7v; Cut out ~3.0V
 Referance voltage for feather is 3.3v
 analogRead will give from 0 to 1023 with 1023 = 3.3v
 Feather has double 100K resistor divider on BAT pin connected to A6 so reading is halved
@@ -187,13 +192,13 @@ void batVolts ()
 		tft.setTextColor(ST77XX_RED);
 		batStatus = 2;
 	}
-	if (measuredvbat >= 3.3 && measuredvbat < 3.6)	
+	if (measuredvbat >= 3.3 && measuredvbat < 3.5)	
 	{
 		batText = (" Low ");
 		tft.setTextColor(ST77XX_ORANGE);
 		batStatus = 1;
 	}
-	if (measuredvbat >= 3.6)
+	if (measuredvbat >= 3.5)
 	{
 		batText = (" OK ");
 		tft.setTextColor(ST77XX_GREEN);	
@@ -233,8 +238,8 @@ void dataCalcs ()
 		oldCount = skeinCount;
 	}
 }
-
 //--------------------------------------------------------------------
+
 void counterReset ()
 //Reset counter and meterage to zero
 {
@@ -253,15 +258,15 @@ void counterReset ()
 void screenSaver ()
 {
 //runtime is calculated and stored on every revolution
-//If no revolution millis() less runtime will increase	
-//If no rotation for x blank screen
+//If no revolution millis() less runtime will increase x	
+//If no rotation for x milliseconds blank screen. 
 /*
 	Serial.print("millis "); Serial.println(millis());
 	Serial.print("Run Time ");	Serial.println(runtime);
 	Serial.print("Elapsed Time ");	Serial.println(millis() - runtime);
 	delay(500);
 */
-	if (millis() - runtime > 720000) 		//No revolution/count for x millis
+	if ((millis() - runtime) > (screenOff * 60000)) 	//No revolution/count for x  milliseconds
 	{
 //Turn off screen
 		isDisplayVisible = false;
@@ -269,35 +274,37 @@ void screenSaver ()
 //Reduce backlight to 10%
 		analogWrite(bLightPin, 25);			
 	}
-	else 	//runtime <30,000 millis screen on baclight 100%
+	else 	//runtime <720,000 milliseconds screen on backlight 100%
 	{
 	isDisplayVisible = true;
 	tft.enableDisplay(isDisplayVisible);
-	//Serial.print("isDisplayVisible "); Serial.println(isDisplayVisible);
-	analogWrite(bLightPin, 255);	//Backlight full
+	analogWrite(bLightPin, 255);			//Backlight full
 	}
-}
+}	
 
 //*************************************************************************
+
 void loop()
 {
+	/* Read state of D2. If low ie triggered interrupt 0 will have been actioned.
+		When interrupt actioned revCount() is run and counter incremented see setup.
+	*/
 	state = digitalRead(hallPin);				//Get status of pin 2 high or low
 
 	if ((state == LOW) && (reading = false))	//Magnet in proximity and no current reading
 	{
-		revCount ();							//Counter routine
 		reading = true;							//Set true to avoid second reading
 	}
-	else	//State high no magnet in proximity
+	else										//State high no magnet in proximity
 	{
-		reading = false;		//Set to false to enable another reading
-		led = true;				//
+		reading = false;						//Set to false to enable another reading
+		led = true;				
 	}
 
 	counterReset();		//Check if reset button pressed
 	metersRev ();		//Check if meters per revolution to be adjusted
 	batVolts ();		//Check battery charge
 	dataCalcs ();		//Calculate & display data
-	delay (150);		//Small delay between readings for stability
 	screenSaver ();		//Check if no activity & apply screensaver
+	delay (200);		//Small delay between readings for stability
 }
